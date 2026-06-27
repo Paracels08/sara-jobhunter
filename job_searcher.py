@@ -361,8 +361,39 @@ def fetch_new_jobs() -> list[dict]:
         if job["score"] >= 3:
             new_jobs.append(job)
 
-    new_jobs.sort(key=lambda j: j["score"], reverse=True)
-    _save_seen(seen)
+    def _sort_key(j):
+        title_lower = j.get("title", "").lower()
+        loc_lower = j.get("location", "").lower()
+        # 1st priority: Slovenia
+        is_slovenia = "slovenia" in loc_lower or "ljubljana" in loc_lower
+        # 2nd priority: PM/PO title over project manager / analyst
+        is_pm = any(p in title_lower for p in ["product manager", "product owner", "head of product"])
+        return (not is_slovenia, not is_pm, -j["score"])
 
+    new_jobs.sort(key=_sort_key)
+    new_jobs = new_jobs[:20]  # cap at 20 per day
+
+    _save_seen(seen)
     log.info("New qualifying jobs this run: %d (from %d raw)", len(new_jobs), len(raw))
     return new_jobs
+
+
+# Industry tags to surface in job cards
+INDUSTRY_TAGS = [
+    "saas", "fintech", "banking", "payments", "insurtech",
+    "sports", "media", "entertainment", "gaming", "adtech",
+    "ai", "machine learning", "llm", "data", "analytics",
+    "healthtech", "edtech", "e-commerce", "marketplace",
+    "cybersecurity", "iot", "cloud", "developer tools",
+    "travel tech", "proptech", "hr tech", "legaltech",
+]
+
+def extract_industry_tags(job: dict) -> list[str]:
+    """Return up to 3 industry/domain tags visible in the job card."""
+    text = (
+        (job.get("description") or "") + " " +
+        (job.get("tags") or "") + " " +
+        (job.get("company") or "")
+    ).lower()
+    found = [tag for tag in INDUSTRY_TAGS if tag in text]
+    return found[:3]

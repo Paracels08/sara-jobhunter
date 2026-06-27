@@ -12,7 +12,7 @@ import schedule
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
-from job_searcher import fetch_new_jobs
+from job_searcher import fetch_new_jobs, extract_industry_tags
 
 load_dotenv()
 logging.basicConfig(
@@ -74,16 +74,39 @@ def _stars(score: int) -> str:
 def format_job_card(job: dict, index: int) -> str:
     stars = _stars(job.get("score", 0))
     loc = job.get("location", "")
-    remote_tag = "🏠 Remote" if any(w in loc.lower() for w in ["remote", "anywhere", "worldwide"]) else f"📍 {loc}"
+    title_lower = job.get("title", "").lower()
+    loc_lower = loc.lower()
+
+    # Location badge
+    if any(w in loc_lower for w in ["remote", "anywhere", "worldwide"]):
+        loc_badge = "🏠 Remote"
+    elif any(w in loc_lower for w in ["slovenia", "ljubljana"]):
+        loc_badge = f"🇸🇮 {loc}"
+    else:
+        loc_badge = f"📍 {loc}"
+
+    # Role type badge
+    if any(p in title_lower for p in ["product manager", "product owner", "head of product"]):
+        role_badge = "🎯 PM"
+    elif "project manager" in title_lower:
+        role_badge = "📋 Project Manager"
+    else:
+        role_badge = "📊 Product Analyst"
+
     posted = job.get("posted", "")
     posted_str = f" · {posted}" if posted else ""
+
+    # Industry tags
+    tags = extract_industry_tags(job)
+    tags_str = ("  •  " + "  ·  ".join(f"#{t.replace(' ', '')}" for t in tags)) if tags else ""
+
     desc = job.get("description", "").strip()
-    desc_preview = (desc[:180] + "…") if len(desc) > 180 else desc
+    desc_preview = (desc[:160] + "…") if len(desc) > 160 else desc
 
     lines = [
         f"<b>{index}. {job['title']}</b> {stars}",
-        f"🏢 {job.get('company', 'Unknown')}",
-        f"{remote_tag}{posted_str}",
+        f"{role_badge}  ·  🏢 {job.get('company', 'Unknown')}",
+        f"{loc_badge}{posted_str}{tags_str}",
         f"🔗 <a href=\"{job['url']}\">View & Apply</a>",
     ]
     if desc_preview:
@@ -142,11 +165,9 @@ def send_no_new_jobs() -> None:
 
 def send_outro(count: int) -> None:
     if count <= 3:
-        msg = "That's all for now! I'll be back with more soon 💌 — Sara"
-    elif count <= 8:
-        msg = f"That's your {count} picks for today! Remember: you're looking for the creative, feature-driven role 🎯 Good luck! — Sara"
+        msg = "That's all for now! 🇸🇮 Slovenia picks are first, then EU remote. I'll check again tomorrow — Sara 💌"
     else:
-        msg = f"Wow, {count} roles today! Quality over quantity — I sorted them by match score, so start from the top ⬆️ — Sara"
+        msg = f"Your top {count} for today ☝️ Slovenian jobs first, then EU remote — PM roles prioritised. Good luck Ganna! 🎯 — Sara"
     send_message(msg)
 
 
